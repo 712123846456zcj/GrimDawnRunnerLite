@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.pubxml.user
+
+# AI / local tooling
+.claude/
+
+# Local-only or non-public project folders
+docs/
+upload/
+GitHubPackageTemplate/
+
+# Large local font packages
+Assets/FontBundle/*.zip
