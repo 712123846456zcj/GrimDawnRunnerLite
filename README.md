@@ -2,6 +2,11 @@
 
 一个面向《恐怖黎明》（Grim Dawn）玩家的轻量本地启动器。
 
+<p align="center">
+  <img src="preview/1.png" width="48%" />
+  <img src="preview/2.png" width="48%" />
+</p>
+
 这个项目主要用来简化游戏启动和一些常用管理操作，例如游戏目录设置、账号配置修改、汉化字体管理，以及字体包在线更新。
 
 ## 功能特性
