@@ -883,7 +883,7 @@
                             <Ellipse x:Name="OperationStatusDot" Width="6" Height="6" Margin="0,0,8,0" VerticalAlignment="Center" Fill="#6F7882"/>
                             <TextBlock x:Name="OperationStatusText" VerticalAlignment="Center" Foreground="#707A85" Text="等待操作"/>
                         </StackPanel>
-                        <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#414A54" Text="GRIM DAWN RUNNER LITE · 1.1"/>
+                        <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#414A54" Text=" by AiMaoster(师傅是只猫)"/>
                     </DockPanel>
                 </Grid>
             </Grid>
