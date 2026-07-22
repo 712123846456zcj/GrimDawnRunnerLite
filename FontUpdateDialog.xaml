@@ -70,7 +70,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" Margin="15,0,0,0" VerticalAlignment="Center">
                     <TextBlock Foreground="#4C97D7" FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE896;"/>
-                    <TextBlock Margin="10,0,0,0" Foreground="#E6E9ED" FontSize="12" FontWeight="SemiBold" Text="字体包更新"/>
+                    <TextBlock x:Name="DialogHeaderText" Margin="10,0,0,0" Foreground="#E6E9ED" FontSize="12" FontWeight="SemiBold" Text="汉化内容更新"/>
                 </StackPanel>
                 <Button x:Name="TitleCloseButton" Grid.Column="1" Width="42" Height="42" WindowChrome.IsHitTestVisibleInChrome="True" Foreground="#BDC4CC" Background="Transparent" BorderThickness="0" Cursor="Hand" Click="CloseButton_Click">
                     <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="10" Text="&#xE8BB;"/>
@@ -83,7 +83,7 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <StackPanel>
-                    <TextBlock Foreground="#F3F0E9" FontSize="21" FontWeight="SemiBold" Text="可下载的字体更新"/>
+                    <TextBlock x:Name="DialogTitleText" Foreground="#F3F0E9" FontSize="21" FontWeight="SemiBold" Text="可下载的汉化更新"/>
                     <TextBlock x:Name="SummaryText" Margin="0,7,0,0" Foreground="#858F9A" FontSize="11" TextWrapping="Wrap" Text="下载完成后会校验 SHA-256，并保存到程序目录的 AssetsFontBundle。"/>
                 </StackPanel>
 
@@ -107,6 +107,9 @@
                                                 <TextBlock Margin="9,2,0,0" Foreground="#6E9FCD" FontSize="10.5" Text="{Binding Package.EnglishName}"/>
                                                 <Border Margin="10,0,0,0" Padding="7,3" Background="#203B5771" BorderBrush="#3A75A9D2" BorderThickness="1" CornerRadius="9">
                                                     <TextBlock Foreground="#83B9E8" FontSize="9.5" Text="{Binding VersionLabel}"/>
+                                                </Border>
+                                                <Border Margin="8,0,0,0" Padding="7,3" Background="#202D4934" BorderBrush="#39629B70" BorderThickness="1" CornerRadius="9">
+                                                    <TextBlock Foreground="#8FC99A" FontSize="9.5" Text="{Binding Package.SupportedGameVersion}"/>
                                                 </Border>
                                             </StackPanel>
                                             <TextBlock Margin="0,7,18,0" Foreground="#87919C" FontSize="10.5" TextWrapping="Wrap" Text="{Binding Package.Description}"/>

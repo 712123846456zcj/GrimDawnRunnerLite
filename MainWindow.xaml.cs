@@ -33,7 +33,10 @@ public partial class MainWindow : Window
     private bool _isLocalizationBusy;
     private bool _fontUpdateCheckInProgress;
     private IReadOnlyList<FontPackageUpdate> _availableFontUpdates = [];
+    private IReadOnlyList<FontPackageUpdate> _availableTextUpdates = [];
     private string _currentPage = "home";
+    private bool _loadingNetworkSettings;
+    private bool _networkTestInProgress;
 
     private sealed class FontPackageCardViewModel
     {
@@ -49,6 +52,7 @@ public partial class MainWindow : Window
         public string Id => Package.Id;
         public string Name => Package.Name;
         public string Description => Package.Description;
+        public string SupportedGameVersion => Package.SupportedGameVersion;
     }
 
     private string X64Executable => Path.Combine(_gameRoot, "x64", "Grim Dawn.exe");
@@ -67,6 +71,7 @@ public partial class MainWindow : Window
         _forwardedArguments = BuildForwardedArguments(Environment.GetCommandLineArgs().Skip(1));
         _settings = settings;
         CloseAfterLaunchCheckBox.IsChecked = _settings.CloseAfterLaunch;
+        ApplyNetworkSettingsToControls();
 
         ArchitectureText.Text = Environment.Is64BitOperatingSystem ? "64 位 Windows" : "32 位 Windows";
         RecommendationText.Text = Environment.Is64BitOperatingSystem
@@ -193,6 +198,7 @@ public partial class MainWindow : Window
         AccountPage.Visibility = page == "account" ? Visibility.Visible : Visibility.Collapsed;
         ModsPage.Visibility = page == "mods" ? Visibility.Visible : Visibility.Collapsed;
         LocalizationPage.Visibility = page == "localization" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = page == "settings" ? Visibility.Visible : Visibility.Collapsed;
         UsagePage.Visibility = page == "usage" ? Visibility.Visible : Visibility.Collapsed;
         AboutPage.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
 
@@ -200,6 +206,7 @@ public partial class MainWindow : Window
         SetNavState(NavAccountButton, page == "account");
         SetNavState(NavModsButton, page == "mods");
         SetNavState(NavLocalizationButton, page == "localization");
+        SetNavState(NavSettingsButton, page == "settings");
         SetNavState(NavUsageButton, page == "usage");
         SetNavState(NavAboutButton, page == "about");
 
@@ -208,6 +215,7 @@ public partial class MainWindow : Window
             "account" => ("离线和联机", "管理局域网或远程联机使用的唯一账户标识"),
             "mods" => ("Mod 管理", "集中发现、启用和维护自定义模组"),
             "localization" => ("汉化管理", "一键安装,备份,还原汉化文件"),
+            "settings" => ("设置", "下载线路、系统代理与自定义网络设置"),
             "usage" => ("使用说明", "游戏目录、启动模式与联机配置说明"),
             "about" => ("关于", "Grim Dawn Runner Lite 项目信息"),
             _ => ("主页", "选择启动方式并快速访问常用目录")
@@ -215,6 +223,7 @@ public partial class MainWindow : Window
 
         if (page == "account") LoadAccountConfiguration();
         if (page == "localization") RefreshLocalizationPage();
+        if (page == "settings") RefreshNetworkSettingsSummary();
     }
 
     private static void SetNavState(Button button, bool selected)
@@ -401,77 +410,137 @@ public partial class MainWindow : Window
         if (_fontUpdateCheckInProgress) return;
         _fontUpdateCheckInProgress = true;
         CheckFontUpdatesButton.IsEnabled = false;
-        FontUpdateButtonText.Text = "检查中…";
-        CheckFontUpdatesButton.Background = new SolidColorBrush(Color.FromRgb(28, 33, 40));
-        CheckFontUpdatesButton.BorderBrush = new SolidColorBrush(Color.FromRgb(58, 66, 76));
-        CheckFontUpdatesButton.Foreground = new SolidColorBrush(Color.FromRgb(190, 197, 205));
+        CheckTextUpdatesButton.IsEnabled = false;
+        SetCheckingButtonState(CheckFontUpdatesButton, FontUpdateButtonText);
+        SetCheckingButtonState(CheckTextUpdatesButton, TextUpdateButtonText);
 
         try
         {
-            FontUpdateCheckResult result = await FontUpdateService.CheckForUpdatesAsync(_settings.FontPackageStates);
+            FontUpdateCheckResult result = await FontUpdateService.CheckForUpdatesAsync(
+                _settings.FontPackageStates,
+                _settings.TextPackageStates,
+                _settings);
+            LocalizationNetworkText.Text = $"最近更新线路：{result.RouteName}";
             _availableFontUpdates = result.Updates;
+            _availableTextUpdates = result.TextUpdates;
 
-            var updateIds = result.Updates.Select(update => update.Package.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (RemoteFontPackage package in result.Manifest.FontPackages.Where(package => !updateIds.Contains(package.Id)))
-            {
-                string hash = result.LocalHashes.TryGetValue(package.Id, out string? localHash)
-                    ? localHash
-                    : package.Sha256.Trim().ToLowerInvariant();
-                _settings.FontPackageStates[package.Id] = new FontPackageState
-                {
-                    Version = package.Version,
-                    Sha256 = hash,
-                    UpdatedAtUtc = DateTimeOffset.UtcNow
-                };
-            }
+            UpdatePackageStates(
+                result.Manifest.FontPackages,
+                result.Updates,
+                result.LocalHashes,
+                _settings.FontPackageStates);
+            UpdatePackageStates(
+                result.Manifest.TextPackages,
+                result.TextUpdates,
+                result.TextLocalHashes,
+                _settings.TextPackageStates);
             SaveSettings();
 
-            if (_availableFontUpdates.Count > 0)
-            {
-                FontUpdateButtonText.Text = $"可更新 {_availableFontUpdates.Count}";
-                CheckFontUpdatesButton.Background = new SolidColorBrush(Color.FromRgb(45, 126, 75));
-                CheckFontUpdatesButton.BorderBrush = new SolidColorBrush(Color.FromRgb(80, 184, 111));
-                CheckFontUpdatesButton.Foreground = Brushes.White;
-                CheckFontUpdatesButton.ToolTip = "发现新的字体包或本地文件与远端版本不一致";
-            }
-            else
-            {
-                FontUpdateButtonText.Text = "已是最新";
-                CheckFontUpdatesButton.Background = new SolidColorBrush(Color.FromRgb(24, 29, 35));
-                CheckFontUpdatesButton.BorderBrush = new SolidColorBrush(Color.FromRgb(53, 61, 71));
-                CheckFontUpdatesButton.Foreground = new SolidColorBrush(Color.FromRgb(157, 166, 176));
-                CheckFontUpdatesButton.ToolTip = "点击重新检查字体更新";
-            }
+            SetUpdateButtonState(
+                CheckFontUpdatesButton,
+                FontUpdateButtonText,
+                _availableFontUpdates.Count,
+                "字体");
+            SetUpdateButtonState(
+                CheckTextUpdatesButton,
+                TextUpdateButtonText,
+                _availableTextUpdates.Count,
+                "文本");
         }
         catch (Exception ex)
         {
             _availableFontUpdates = [];
-            FontUpdateButtonText.Text = "检查更新";
-            CheckFontUpdatesButton.Background = new SolidColorBrush(Color.FromRgb(24, 29, 35));
-            CheckFontUpdatesButton.BorderBrush = new SolidColorBrush(Color.FromRgb(53, 61, 71));
-            CheckFontUpdatesButton.Foreground = new SolidColorBrush(Color.FromRgb(157, 166, 176));
-            CheckFontUpdatesButton.ToolTip = $"暂未取得远端清单：{ex.Message}";
+            _availableTextUpdates = [];
+            ResetUpdateButton(CheckFontUpdatesButton, FontUpdateButtonText, "检查更新", ex.Message);
+            ResetUpdateButton(CheckTextUpdatesButton, TextUpdateButtonText, "检查更新", ex.Message);
+            LocalizationNetworkText.Text = "最近更新线路：连接失败，可在设置中测试网络";
             if (showErrors)
             {
-                MessageBox.Show(this, $"获取字体更新信息失败：\n\n{ex.Message}", "检查字体更新", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(this, $"获取汉化更新信息失败：\n\n{ex.Message}", "检查汉化更新", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
         finally
         {
             _fontUpdateCheckInProgress = false;
             CheckFontUpdatesButton.IsEnabled = !_isLocalizationBusy;
+            CheckTextUpdatesButton.IsEnabled = !_isLocalizationBusy;
         }
+    }
+
+    private static void UpdatePackageStates(
+        IReadOnlyList<RemoteFontPackage> packages,
+        IReadOnlyList<FontPackageUpdate> updates,
+        IReadOnlyDictionary<string, string> localHashes,
+        IDictionary<string, FontPackageState> states)
+    {
+        var updateIds = updates.Select(update => update.Package.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (RemoteFontPackage package in packages.Where(package => !updateIds.Contains(package.Id)))
+        {
+            string hash = localHashes.TryGetValue(package.Id, out string? localHash)
+                ? localHash
+                : package.Sha256.Trim().ToLowerInvariant();
+            states[package.Id] = new FontPackageState
+            {
+                Version = package.Version,
+                Sha256 = hash,
+                UpdatedAtUtc = DateTimeOffset.UtcNow
+            };
+        }
+    }
+
+    private static void SetCheckingButtonState(Button button, TextBlock text)
+    {
+        text.Text = "检查中…";
+        button.Background = new SolidColorBrush(Color.FromRgb(28, 33, 40));
+        button.BorderBrush = new SolidColorBrush(Color.FromRgb(58, 66, 76));
+        button.Foreground = new SolidColorBrush(Color.FromRgb(190, 197, 205));
+    }
+
+    private static void SetUpdateButtonState(Button button, TextBlock text, int updateCount, string packageLabel)
+    {
+        if (updateCount > 0)
+        {
+            text.Text = $"可更新 {updateCount}";
+            button.Background = new SolidColorBrush(Color.FromRgb(45, 126, 75));
+            button.BorderBrush = new SolidColorBrush(Color.FromRgb(80, 184, 111));
+            button.Foreground = Brushes.White;
+            button.ToolTip = $"发现新的{packageLabel}包或本地文件与远端版本不一致";
+        }
+        else
+        {
+            ResetUpdateButton(button, text, "已是最新", $"点击重新检查{packageLabel}更新");
+        }
+    }
+
+    private static void ResetUpdateButton(Button button, TextBlock text, string label, string toolTip)
+    {
+        text.Text = label;
+        button.Background = new SolidColorBrush(Color.FromRgb(24, 29, 35));
+        button.BorderBrush = new SolidColorBrush(Color.FromRgb(53, 61, 71));
+        button.Foreground = new SolidColorBrush(Color.FromRgb(157, 166, 176));
+        button.ToolTip = toolTip;
     }
 
     private async void CheckFontUpdatesButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_availableFontUpdates.Count == 0)
-        {
-            await CheckFontUpdatesAsync(true);
-        }
+        if (_availableFontUpdates.Count == 0) await CheckFontUpdatesAsync(true);
         if (_availableFontUpdates.Count == 0) return;
 
-        var dialog = new FontUpdateDialog(_availableFontUpdates, _settings)
+        var dialog = new FontUpdateDialog(_availableFontUpdates, _settings, LocalizationPackageType.Font)
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+        RefreshLocalizationPage();
+        await CheckFontUpdatesAsync(false);
+    }
+
+    private async void CheckTextUpdatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_availableTextUpdates.Count == 0) await CheckFontUpdatesAsync(true);
+        if (_availableTextUpdates.Count == 0) return;
+
+        var dialog = new FontUpdateDialog(_availableTextUpdates, _settings, LocalizationPackageType.Text)
         {
             Owner = this
         };
@@ -515,7 +584,8 @@ public partial class MainWindow : Window
         else if (installedTextCount > 0)
         {
             LocalizationStatusDot.Fill = AvailableBrush;
-            LocalizationStatusText.Text = $"当前已启用汉化文本，游戏根目录中有 {installedTextCount} 个文本文件。";
+            string textPackageName = _settings.InstalledTextPackageName ?? "已有汉化文本";
+            LocalizationStatusText.Text = $"当前已启用：{textPackageName}，游戏根目录中有 {installedTextCount} 个文本文件。";
         }
         else if (existing.Count > 0)
         {
@@ -576,7 +646,8 @@ public partial class MainWindow : Window
     private FontPackageCardViewModel CreateTextPackageCard(FontPackage package)
     {
         bool archiveExists = File.Exists(package.ArchivePath);
-        bool installed = LocalizationService.CountInstalledTextFiles(_gameRoot) > 0;
+        bool installed = string.Equals(_settings.InstalledTextPackageId, package.Id, StringComparison.OrdinalIgnoreCase)
+            && LocalizationService.CountInstalledTextFiles(_gameRoot) > 0;
 
         string statusText;
         Brush statusBrush;
@@ -757,6 +828,10 @@ public partial class MainWindow : Window
         {
             FontInstallationResult result = await Task.Run(() =>
                 LocalizationService.InstallTextPackage(package, _gameRoot, cleanExisting));
+            _settings.InstalledTextPackageId = package.Id;
+            _settings.InstalledTextPackageName = package.Name;
+            _settings.TextInstalledAtUtc = DateTimeOffset.UtcNow;
+            SaveSettings();
 
             RefreshLocalizationPage();
             SetOperationStatus($"已启用汉化文本：{package.Name}", AvailableBrush);
@@ -799,6 +874,13 @@ public partial class MainWindow : Window
         try
         {
             bool removed = await Task.Run(() => LocalizationService.RemoveGameTexts(_gameRoot));
+            if (removed)
+            {
+                _settings.InstalledTextPackageId = null;
+                _settings.InstalledTextPackageName = null;
+                _settings.TextInstalledAtUtc = null;
+                SaveSettings();
+            }
             SetOperationStatus(removed ? $"已删除汉化文本：{package.Name}" : "没有找到已安装的汉化文本文件", removed ? AvailableBrush : NeutralBrush);
         }
         catch (Exception ex)
@@ -826,6 +908,7 @@ public partial class MainWindow : Window
         OpenGameTextsButton.IsEnabled = !busy;
         OpenUserSettingsButton.IsEnabled = !busy;
         CheckFontUpdatesButton.IsEnabled = !busy && !_fontUpdateCheckInProgress;
+        CheckTextUpdatesButton.IsEnabled = !busy && !_fontUpdateCheckInProgress;
         if (!string.IsNullOrWhiteSpace(message))
         {
             LocalizationStatusDot.Fill = WarningBrush;
@@ -917,7 +1000,139 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SaveSettings()
+    private void ApplyNetworkSettingsToControls()
+    {
+        _loadingNetworkSettings = true;
+        AutoRouteRadioButton.IsChecked = _settings.DownloadRouteMode == DownloadRouteMode.Auto;
+        AcceleratedRouteRadioButton.IsChecked = _settings.DownloadRouteMode == DownloadRouteMode.AcceleratedOnly;
+        OfficialRouteRadioButton.IsChecked = _settings.DownloadRouteMode == DownloadRouteMode.OfficialOnly;
+        SystemProxyRadioButton.IsChecked = _settings.NetworkProxyMode == NetworkProxyMode.System;
+        DirectProxyRadioButton.IsChecked = _settings.NetworkProxyMode == NetworkProxyMode.Direct;
+        CustomProxyRadioButton.IsChecked = _settings.NetworkProxyMode == NetworkProxyMode.Custom;
+        CustomProxyTextBox.Text = _settings.CustomProxyAddress ?? "";
+        _loadingNetworkSettings = false;
+        UpdateCustomProxyControls();
+        RefreshNetworkSettingsSummary();
+    }
+
+    private DownloadNetworkOptions GetNetworkOptionsFromControls()
+    {
+        DownloadRouteMode routeMode = AcceleratedRouteRadioButton.IsChecked == true
+            ? DownloadRouteMode.AcceleratedOnly
+            : OfficialRouteRadioButton.IsChecked == true
+                ? DownloadRouteMode.OfficialOnly
+                : DownloadRouteMode.Auto;
+        NetworkProxyMode proxyMode = DirectProxyRadioButton.IsChecked == true
+            ? NetworkProxyMode.Direct
+            : CustomProxyRadioButton.IsChecked == true
+                ? NetworkProxyMode.Custom
+                : NetworkProxyMode.System;
+        string? customAddress = string.IsNullOrWhiteSpace(CustomProxyTextBox.Text)
+            ? null
+            : CustomProxyTextBox.Text.Trim();
+        if (proxyMode == NetworkProxyMode.Custom)
+        {
+            customAddress = NetworkDownloadService.NormalizeCustomProxyAddress(customAddress).AbsoluteUri.TrimEnd('/');
+        }
+        return new DownloadNetworkOptions(routeMode, proxyMode, customAddress);
+    }
+
+    private void NetworkSetting_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_loadingNetworkSettings || !IsLoaded) return;
+        UpdateCustomProxyControls();
+        NetworkSettingsStatusText.Text = "设置已更改，点击保存后生效。";
+        NetworkSettingsStatusDot.Fill = NeutralBrush;
+        try
+        {
+            NetworkRouteSummaryText.Text = NetworkDownloadService.GetRouteSummary(GetNetworkOptionsFromControls());
+        }
+        catch
+        {
+            NetworkRouteSummaryText.Text = "请完善自定义代理地址后保存。";
+        }
+    }
+
+    private void CustomProxyTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_loadingNetworkSettings || !IsLoaded) return;
+        NetworkSettingsStatusText.Text = "代理地址已更改，点击测试连接或保存。";
+        NetworkSettingsStatusDot.Fill = NeutralBrush;
+    }
+
+    private void UpdateCustomProxyControls()
+    {
+        bool enabled = CustomProxyRadioButton.IsChecked == true;
+        CustomProxyTextBox.IsEnabled = enabled;
+    }
+
+    private void RefreshNetworkSettingsSummary()
+    {
+        DownloadNetworkOptions options = DownloadNetworkOptions.FromSettings(_settings);
+        NetworkRouteSummaryText.Text = NetworkDownloadService.GetRouteSummary(options);
+        LocalizationNetworkText.Text = $"更新线路：{NetworkDownloadService.GetRouteSummary(options)}";
+        SystemProxyInfo proxy = NetworkDownloadService.GetSystemProxyInfo();
+        SystemProxyStatusText.Text = proxy.IsEnabled && !string.IsNullOrWhiteSpace(proxy.Address)
+            ? $"已检测到 Windows 系统代理：{proxy.Address}"
+            : "当前未启用 Windows 系统代理";
+        SystemProxyStatusText.Foreground = proxy.IsEnabled ? AvailableBrush : NeutralBrush;
+    }
+
+    private void SaveNetworkSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            DownloadNetworkOptions options = GetNetworkOptionsFromControls();
+            _settings.DownloadRouteMode = options.RouteMode;
+            _settings.NetworkProxyMode = options.ProxyMode;
+            _settings.CustomProxyAddress = options.CustomProxyAddress;
+            SettingsService.Save(_settings);
+            RefreshNetworkSettingsSummary();
+            NetworkSettingsStatusDot.Fill = AvailableBrush;
+            NetworkSettingsStatusText.Text = "网络设置已保存，后续更新请求将使用新线路。";
+            SetOperationStatus("网络设置已保存", AvailableBrush);
+        }
+        catch (Exception ex)
+        {
+            NetworkSettingsStatusDot.Fill = MissingBrush;
+            NetworkSettingsStatusText.Text = ex.Message;
+            MessageBox.Show(this, ex.Message, "保存网络设置", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void TestNetworkConnectionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_networkTestInProgress) return;
+        try
+        {
+            DownloadNetworkOptions options = GetNetworkOptionsFromControls();
+            _networkTestInProgress = true;
+            TestNetworkConnectionButton.IsEnabled = false;
+            SaveNetworkSettingsButton.IsEnabled = false;
+            NetworkSettingsStatusDot.Fill = NeutralBrush;
+            NetworkSettingsStatusText.Text = "正在测试 GitHub 官方清单连接…";
+            NetworkConnectionTestResult result = await NetworkDownloadService.TestOfficialConnectionAsync(
+                FontUpdateService.ManifestUrl,
+                options);
+            NetworkSettingsStatusDot.Fill = result.Success ? AvailableBrush : MissingBrush;
+            NetworkSettingsStatusText.Text = result.Success
+                ? $"{result.RouteName}：{result.Message}"
+                : $"{result.RouteName}测试失败：{result.Message}";
+        }
+        catch (Exception ex)
+        {
+            NetworkSettingsStatusDot.Fill = MissingBrush;
+            NetworkSettingsStatusText.Text = ex.Message;
+        }
+        finally
+        {
+            _networkTestInProgress = false;
+            TestNetworkConnectionButton.IsEnabled = true;
+            SaveNetworkSettingsButton.IsEnabled = true;
+        }
+    }
+
+private void SaveSettings()
     {
         _settings.GameRoot = _gameRoot;
         _settings.CloseAfterLaunch = CloseAfterLaunchCheckBox.IsChecked == true;

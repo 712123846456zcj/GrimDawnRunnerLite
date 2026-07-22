@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-22T00:00:00Z",
+  "fontPackages": [
+    {
+      "id": "microsoft-yahei",
+      "name": "微软雅黑",
+      "englishName": "Microsoft YaHei",
+      "version": "1.0.0",
+      "supportedGameVersion": "全版本通用",
+      "description": "经典清晰的微软雅黑风格，适合界面文字、装备词条和长时间阅读。",
+      "archiveUrl": "https://github.com/712123846456zcj/GrimDawnRunnerLite-Packages/releases/download/fonts-v1.0.0/microsoft-yahei-v1.0.0.zip",
+      "previewUrl": "https://github.com/712123846456zcj/GrimDawnRunnerLite-Packages/releases/download/fonts-v1.0.0/microsoft-yahei-v1.0.0.png",
+      "archiveFileName": "微软雅黑.zip",
+      "previewFileName": "微软雅黑.png",
+      "sha256": "0c4fb1b506901d5c99a9ed07e80141109fbfa915168aff4a433d9b42f616498c",
+      "previewSha256": "882c1a34316a897b783f48da7c6c42d424474d3e00cabef9728bc76ca69aef77",
+      "size": 97486926
+    }
+  ],
+  "textPackages": [
+    {
+      "id": "affixes-for-professions-enhanced",
+      "name": "词缀职业显示增强",
+      "englishName": "Affixes for professions are enhanced",
+      "version": "1.0.0",
+      "supportedGameVersion": "v1.2.1.6",
+      "description": "增强装备词缀与职业相关文本的显示和标识，便于查看构筑信息。",
+      "archiveUrl": "https://github.com/712123846456zcj/GrimDawnRunnerLite-Packages/releases/download/text-v1.0.0/Affixes.for.professions.are.enhanced.zip",
+      "previewUrl": "https://github.com/712123846456zcj/GrimDawnRunnerLite-Packages/releases/download/text-v1.0.0/Affixes.for.professions.are.enhanced.png",
+      "archiveFileName": "词缀职业显示增强.zip",
+      "previewFileName": "词缀职业显示增强.png",
+      "sha256": "b2d87833706b7000ba03ce80b217410e9a3c98a405f875e43573ba552b0f8ccc",
+      "previewSha256": "fd1dbd636e99ac50ae48e1ad54309c254c2046b6595381231d8ebcd580e4ac98",
+      "size": 1569461
+    }
+  ]
+}

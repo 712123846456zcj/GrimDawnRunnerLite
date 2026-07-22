@@ -12,17 +12,30 @@ public partial class FontUpdateDialog : Window
 {
     private readonly LauncherSettings _settings;
     private readonly List<FontUpdateItemViewModel> _items;
+    private readonly LocalizationPackageType _packageType;
     private bool _downloadInProgress;
 
     public bool PackagesChanged { get; private set; }
 
-    public FontUpdateDialog(IReadOnlyList<FontPackageUpdate> updates, LauncherSettings settings)
+    public FontUpdateDialog(
+        IReadOnlyList<FontPackageUpdate> updates,
+        LauncherSettings settings,
+        LocalizationPackageType packageType)
     {
         InitializeComponent();
         _settings = settings;
-        _items = updates.Select(update => new FontUpdateItemViewModel(update)).ToList();
+        _packageType = packageType;
+        _items = updates.Select(update => new FontUpdateItemViewModel(update, packageType)).ToList();
         DataContext = _items;
-        SummaryText.Text = $"发现 {_items.Count} 个可下载项目。下载完成后会校验 SHA-256，并保存到程序目录的 Assets\\FontBundle。";
+
+        bool isText = packageType == LocalizationPackageType.Text;
+        string packageLabel = isText ? "汉化文本包" : "字体包";
+        string directoryLabel = isText ? @"Assets\TextBundle" : @"Assets\FontBundle";
+        Title = isText ? "汉化文本下载" : "字体下载";
+        DialogHeaderText.Text = isText ? "汉化文本更新" : "字体包更新";
+        DialogTitleText.Text = isText ? "可下载的汉化文本" : "可下载的字体更新";
+        FooterStatusText.Text = $"可以逐个下载需要的{packageLabel}。";
+        SummaryText.Text = $"发现 {_items.Count} 个可下载项目。下载完成后会校验 SHA-256，并保存到程序目录的 {directoryLabel}。";
     }
 
     private async void DownloadButton_Click(object sender, RoutedEventArgs e)
@@ -44,12 +57,16 @@ public partial class FontUpdateDialog : Window
             item.ProgressValue = value.Percentage;
             item.PercentageText = $"{value.Percentage:0}%";
             item.ProgressText = FormatProgress(value);
+            if (!string.IsNullOrWhiteSpace(value.RouteName)) FooterStatusText.Text = $"正在通过{value.RouteName}下载 {item.Package.Name}…";
         });
 
         try
         {
-            FontPackageDownloadResult result = await FontUpdateService.DownloadPackageAsync(item.Package, progress);
-            _settings.FontPackageStates[item.Package.Id] = new FontPackageState
+            FontPackageDownloadResult result = await FontUpdateService.DownloadPackageAsync(item.Package, _packageType, _settings, progress);
+            Dictionary<string, FontPackageState> packageStates = _packageType == LocalizationPackageType.Text
+                ? _settings.TextPackageStates
+                : _settings.FontPackageStates;
+            packageStates[item.Package.Id] = new FontPackageState
             {
                 Version = result.Version,
                 Sha256 = result.Sha256,
@@ -67,7 +84,9 @@ public partial class FontUpdateDialog : Window
 
             if (_items.All(candidate => candidate.Completed))
             {
-                SummaryText.Text = "全部字体更新已经下载完成，关闭窗口后商品列表会自动刷新。";
+                SummaryText.Text = _packageType == LocalizationPackageType.Text
+                    ? "全部汉化文本已经下载完成，关闭窗口后列表会自动刷新。"
+                    : "全部字体更新已经下载完成，关闭窗口后商品列表会自动刷新。";
                 FooterStatusText.Text = "全部下载完成。";
             }
         }
@@ -77,7 +96,7 @@ public partial class FontUpdateDialog : Window
             item.ProgressText = $"下载失败：{ex.Message}";
             item.PercentageText = "失败";
             FooterStatusText.Text = $"{item.Package.Name} 下载失败。";
-            MessageBox.Show(this, $"下载 {item.Package.Name} 时发生错误：\n\n{ex.Message}", "字体下载失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, $"下载 {item.Package.Name} 时发生错误：\n\n{ex.Message}", _packageType == LocalizationPackageType.Text ? "汉化文本下载失败" : "字体下载失败", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -138,17 +157,17 @@ public partial class FontUpdateDialog : Window
         private string _percentageText = "0%";
         private double _progressValue;
 
-        public FontUpdateItemViewModel(FontPackageUpdate update)
+        public FontUpdateItemViewModel(FontPackageUpdate update, LocalizationPackageType packageType)
         {
             Update = update;
             DifferenceText = update.IsMissing
                 ? "本地尚未下载"
                 : update.VersionChanged && update.HashChanged
-                    ? "远端版本和字体包哈希均有变化"
+                    ? $"远端版本和{(packageType == LocalizationPackageType.Text ? "文本包" : "字体包")}哈希均有变化"
                     : update.VersionChanged
                         ? "远端版本号有变化"
                         : update.HashChanged
-                            ? "本地字体包哈希与远端不一致"
+                            ? $"本地{(packageType == LocalizationPackageType.Text ? "文本包" : "字体包")}哈希与远端不一致"
                             : "本地预览图缺失或与远端不一致";
         }
 

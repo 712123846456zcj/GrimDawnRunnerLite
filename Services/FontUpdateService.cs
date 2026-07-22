@@ -1,8 +1,4 @@
 using System.IO;
-using System.IO.Compression;
-using System.Net;
-using System.Net.Http;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Wpf_gdRunnerLite.Models;
@@ -19,34 +15,36 @@ public static class FontUpdateService
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly HttpClient HttpClient = CreateHttpClient();
-
     public static async Task<FontUpdateCheckResult> CheckForUpdatesAsync(
-        IReadOnlyDictionary<string, FontPackageState> localStates,
+        IReadOnlyDictionary<string, FontPackageState> localFontStates,
+        IReadOnlyDictionary<string, FontPackageState> localTextStates,
+        LauncherSettings settings,
         CancellationToken cancellationToken = default)
     {
-        using HttpResponseMessage response = await HttpClient.GetAsync(ManifestUrl, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        FontPackageManifest manifest = await JsonSerializer.DeserializeAsync<FontPackageManifest>(stream, JsonOptions, cancellationToken)
-            ?? throw new InvalidDataException("远端字体清单为空。");
-        if (manifest.SchemaVersion != 1)
-        {
-            throw new InvalidDataException($"暂不支持远端清单版本：{manifest.SchemaVersion}");
-        }
-
-        return await EvaluateManifestAsync(
-            manifest,
-            localStates,
-            LocalizationService.BundledFontBundleDirectory,
+        NetworkContentResult content = await NetworkDownloadService.GetContentAsync(
+            ManifestUrl,
+            DownloadNetworkOptions.FromSettings(settings),
+            ValidateManifestContent,
             cancellationToken);
+        FontPackageManifest manifest = JsonSerializer.Deserialize<FontPackageManifest>(content.Content, JsonOptions)
+            ?? throw new InvalidDataException("远端汉化清单为空。");
+
+        FontUpdateCheckResult result = await EvaluateManifestAsync(
+            manifest,
+            localFontStates,
+            localTextStates,
+            LocalizationService.BundledFontBundleDirectory,
+            LocalizationService.BundledTextBundleDirectory,
+            cancellationToken);
+        return result with { RouteName = content.RouteName };
     }
 
     public static async Task<FontUpdateCheckResult> EvaluateManifestAsync(
         FontPackageManifest manifest,
-        IReadOnlyDictionary<string, FontPackageState> localStates,
-        string packageDirectory,
+        IReadOnlyDictionary<string, FontPackageState> localFontStates,
+        IReadOnlyDictionary<string, FontPackageState> localTextStates,
+        string fontPackageDirectory,
+        string textPackageDirectory,
         CancellationToken cancellationToken = default)
     {
         if (manifest.SchemaVersion != 1)
@@ -54,10 +52,35 @@ public static class FontUpdateService
             throw new InvalidDataException($"暂不支持远端清单版本：{manifest.SchemaVersion}");
         }
 
+        PackageEvaluation fontEvaluation = await EvaluatePackagesAsync(
+            manifest.FontPackages,
+            localFontStates,
+            fontPackageDirectory,
+            cancellationToken);
+        PackageEvaluation textEvaluation = await EvaluatePackagesAsync(
+            manifest.TextPackages,
+            localTextStates,
+            textPackageDirectory,
+            cancellationToken);
+
+        return new FontUpdateCheckResult(
+            manifest,
+            fontEvaluation.Updates,
+            fontEvaluation.LocalHashes,
+            textEvaluation.Updates,
+            textEvaluation.LocalHashes);
+    }
+
+    private static async Task<PackageEvaluation> EvaluatePackagesAsync(
+        IReadOnlyList<RemoteFontPackage> packages,
+        IReadOnlyDictionary<string, FontPackageState> localStates,
+        string packageDirectory,
+        CancellationToken cancellationToken)
+    {
         packageDirectory = Path.GetFullPath(packageDirectory);
         var updates = new List<FontPackageUpdate>();
         var localHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (RemoteFontPackage package in manifest.FontPackages)
+        foreach (RemoteFontPackage package in packages)
         {
             ValidatePackage(package);
             string localPath = Path.Combine(
@@ -105,22 +128,27 @@ public static class FontUpdateService
             }
         }
 
-        return new FontUpdateCheckResult(manifest, updates, localHashes);
+        return new PackageEvaluation(updates, localHashes);
     }
 
     public static async Task<FontPackageDownloadResult> DownloadPackageAsync(
         RemoteFontPackage package,
+        LocalizationPackageType packageType,
+        LauncherSettings settings,
         IProgress<FontDownloadProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ValidatePackage(package);
-        Directory.CreateDirectory(LocalizationService.BundledFontBundleDirectory);
+        string packageDirectory = packageType == LocalizationPackageType.Text
+            ? LocalizationService.BundledTextBundleDirectory
+            : LocalizationService.BundledFontBundleDirectory;
+        Directory.CreateDirectory(packageDirectory);
 
         string archiveFileName = EnsureSimpleFileName(package.ArchiveFileName, "archiveFileName");
-        string archivePath = Path.Combine(LocalizationService.BundledFontBundleDirectory, archiveFileName);
+        string archivePath = Path.Combine(packageDirectory, archiveFileName);
         string archiveTemporaryPath = archivePath + ".download";
         string metadataPath = Path.Combine(
-            LocalizationService.BundledFontBundleDirectory,
+            packageDirectory,
             Path.GetFileNameWithoutExtension(archiveFileName) + ".package.json");
         string metadataTemporaryPath = metadataPath + ".download";
 
@@ -129,48 +157,40 @@ public static class FontUpdateService
         if (!string.IsNullOrWhiteSpace(package.PreviewUrl) && !string.IsNullOrWhiteSpace(package.PreviewFileName))
         {
             string previewFileName = EnsureSimpleFileName(package.PreviewFileName, "previewFileName");
-            previewPath = Path.Combine(LocalizationService.BundledFontBundleDirectory, previewFileName);
+            previewPath = Path.Combine(packageDirectory, previewFileName);
             previewTemporaryPath = previewPath + ".download";
         }
 
+        string packageLabel = packageType == LocalizationPackageType.Text ? "汉化文本包" : "字体包";
         try
         {
-            await DownloadFileAsync(
+            DownloadNetworkOptions networkOptions = DownloadNetworkOptions.FromSettings(settings);
+            NetworkDownloadResult archiveDownload = await NetworkDownloadService.DownloadFileAsync(
                 package.ArchiveUrl,
                 archiveTemporaryPath,
-                "正在下载字体包",
+                $"正在下载{packageLabel}",
                 0,
                 previewTemporaryPath is null ? 100 : 92,
+                package.Sha256,
+                networkOptions,
                 progress,
                 cancellationToken);
-
-            string archiveHash = await ComputeSha256Async(archiveTemporaryPath, cancellationToken);
-            string expectedArchiveHash = NormalizeHash(package.Sha256);
-            if (expectedArchiveHash.Length != 64 ||
-                !string.Equals(archiveHash, expectedArchiveHash, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidDataException("字体 ZIP 的 SHA-256 校验失败。");
-            }
+            string archiveHash = archiveDownload.Sha256;
+            string completedRouteName = archiveDownload.RouteName;
 
             if (previewTemporaryPath is not null)
             {
-                await DownloadFileAsync(
+                NetworkDownloadResult previewDownload = await NetworkDownloadService.DownloadFileAsync(
                     package.PreviewUrl,
                     previewTemporaryPath,
                     "正在下载预览图",
                     92,
                     8,
+                    package.PreviewSha256,
+                    networkOptions,
                     progress,
                     cancellationToken);
-
-                if (!string.IsNullOrWhiteSpace(package.PreviewSha256))
-                {
-                    string previewHash = await ComputeSha256Async(previewTemporaryPath, cancellationToken);
-                    if (!string.Equals(previewHash, NormalizeHash(package.PreviewSha256), StringComparison.OrdinalIgnoreCase))
-                    {
-                        throw new InvalidDataException("字体预览图的 SHA-256 校验失败。");
-                    }
-                }
+                completedRouteName = previewDownload.RouteName;
             }
 
             string metadataJson = JsonSerializer.Serialize(package, new JsonSerializerOptions { WriteIndented = true });
@@ -183,7 +203,12 @@ public static class FontUpdateService
             }
             File.Move(metadataTemporaryPath, metadataPath, true);
 
-            progress?.Report(new FontDownloadProgress("下载完成", 100, package.Size, package.Size > 0 ? package.Size : null));
+            progress?.Report(new FontDownloadProgress(
+                "下载完成",
+                100,
+                package.Size,
+                package.Size > 0 ? package.Size : null,
+                completedRouteName));
             return new FontPackageDownloadResult(package.Id, package.Version, archiveHash, archivePath, previewPath);
         }
         finally
@@ -201,66 +226,27 @@ public static class FontUpdateService
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
-    private static async Task DownloadFileAsync(
-        string url,
-        string destinationPath,
-        string stage,
-        double basePercentage,
-        double percentageSpan,
-        IProgress<FontDownloadProgress>? progress,
-        CancellationToken cancellationToken)
+    private static string? ValidateManifestContent(byte[] content)
     {
-        Uri uri = ValidateHttpsUrl(url);
-        using HttpResponseMessage response = await HttpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        long? total = response.Content.Headers.ContentLength;
-        long received = 0;
-        await using Stream input = await response.Content.ReadAsStreamAsync(cancellationToken);
-        await using FileStream output = new(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 128, true);
-        byte[] buffer = new byte[1024 * 128];
-        while (true)
+        try
         {
-            int count = await input.ReadAsync(buffer, cancellationToken);
-            if (count == 0) break;
-            await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
-            received += count;
-            double filePercentage = total is > 0 ? Math.Clamp(received * 100d / total.Value, 0, 100) : 0;
-            progress?.Report(new FontDownloadProgress(
-                stage,
-                basePercentage + filePercentage * percentageSpan / 100d,
-                received,
-                total));
+            FontPackageManifest? manifest = JsonSerializer.Deserialize<FontPackageManifest>(content, JsonOptions);
+            if (manifest is null) return "远端汉化清单为空。";
+            if (manifest.SchemaVersion != 1) return $"暂不支持远端清单版本：{manifest.SchemaVersion}";
+            return null;
         }
-
-        await output.FlushAsync(cancellationToken);
-    }
-
-    private static HttpClient CreateHttpClient()
-    {
-        var handler = new HttpClientHandler
+        catch (Exception ex)
         {
-            AllowAutoRedirect = true,
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli,
-            UseProxy = true,
-            Proxy = WebRequest.DefaultWebProxy,
-            DefaultProxyCredentials = CredentialCache.DefaultCredentials
-        };
-        var client = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromSeconds(30)
-        };
-        string version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "1.0.0";
-        client.DefaultRequestHeaders.UserAgent.ParseAdd($"GrimDawnRunnerLite/{version}");
-        return client;
+            return $"远端汉化清单格式无效：{ex.GetBaseException().Message}";
+        }
     }
 
     private static void ValidatePackage(RemoteFontPackage package)
     {
-        if (string.IsNullOrWhiteSpace(package.Id)) throw new InvalidDataException("远端字体缺少 id。");
-        if (string.IsNullOrWhiteSpace(package.Name)) throw new InvalidDataException($"远端字体 {package.Id} 缺少中文名称。");
-        if (string.IsNullOrWhiteSpace(package.EnglishName)) throw new InvalidDataException($"远端字体 {package.Id} 缺少英文名称。");
-        if (string.IsNullOrWhiteSpace(package.Version)) throw new InvalidDataException($"远端字体 {package.Id} 缺少版本号。");
+        if (string.IsNullOrWhiteSpace(package.Id)) throw new InvalidDataException("远端包缺少 id。");
+        if (string.IsNullOrWhiteSpace(package.Name)) throw new InvalidDataException($"远端包 {package.Id} 缺少中文名称。");
+        if (string.IsNullOrWhiteSpace(package.EnglishName)) throw new InvalidDataException($"远端包 {package.Id} 缺少英文名称。");
+        if (string.IsNullOrWhiteSpace(package.Version)) throw new InvalidDataException($"远端包 {package.Id} 缺少版本号。");
         EnsureSimpleFileName(package.ArchiveFileName, "archiveFileName");
         ValidateHttpsUrl(package.ArchiveUrl);
     }
@@ -299,4 +285,8 @@ public static class FontUpdateService
             // 下次下载会覆盖同名临时文件。
         }
     }
+
+    private sealed record PackageEvaluation(
+        IReadOnlyList<FontPackageUpdate> Updates,
+        IReadOnlyDictionary<string, string> LocalHashes);
 }

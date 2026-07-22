@@ -7,11 +7,30 @@ namespace Wpf_gdRunnerLite.Services;
 
 public static class LocalizationService
 {
-    private static readonly IReadOnlyDictionary<string, (string Id, string Description, int Order)> KnownPackages =
-        new Dictionary<string, (string Id, string Description, int Order)>(StringComparer.OrdinalIgnoreCase)
+    private static readonly IReadOnlyDictionary<string, PackageMetadata> KnownFontPackages =
+        new Dictionary<string, PackageMetadata>(StringComparer.OrdinalIgnoreCase)
         {
-            ["仓耳明楷"] = ("canger-mingkai", "清晰端正的明楷风格，适合任务说明、装备词条和长时间阅读。", 0),
-            ["汉仪正圆"] = ("hanyi-zhengyuan", "圆润醒目的中文字体，在高分辨率界面中具有较好的辨识度。", 1)
+            ["仓耳明楷"] = new("canger-mingkai", "清晰端正的明楷风格，适合任务说明、装备词条和长时间阅读。", 0, "全版本通用", "1.0.0", "Canger MingKai"),
+            ["汉仪正圆"] = new("hanyi-zhengyuan", "圆润醒目的中文字体，在高分辨率界面中具有较好的辨识度。", 1, "全版本通用", "1.0.0", "Hanyi ZhengYuan")
+        };
+
+    private static readonly IReadOnlyDictionary<string, PackageMetadata> KnownTextPackages =
+        new Dictionary<string, PackageMetadata>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["set有简述版v1.10"] = new(
+                "set-summary-v1-10",
+                "为套装与相关内容补充简要说明，适配 Grim Dawn 1.3 正式版。",
+                0,
+                "v1.3.0.0",
+                "1.10",
+                "Set descriptions v1.10"),
+            ["词缀职业显示增强"] = new(
+                "affixes-for-professions-enhanced",
+                "增强装备词缀与职业相关文本的显示和标识，便于查看构筑信息。",
+                1,
+                "v1.2.1.6",
+                "1.0.0",
+                "Affixes for professions are enhanced")
         };
 
     public static string BundledFontBundleDirectory => Path.Combine(AppContext.BaseDirectory, "Assets", "FontBundle");
@@ -30,23 +49,19 @@ public static class LocalizationService
 
     public static string GetGameTextDirectory(string gameRoot) => Path.Combine(GetGameSettingsDirectory(gameRoot), "Text_ZH");
 
-    public static IReadOnlyList<FontPackage> GetAvailableFontPackages()
+    public static IReadOnlyList<FontPackage> GetAvailableFontPackages() =>
+        GetAvailablePackages(BundledFontBundleDirectory, LocalizationPackageType.Font, KnownFontPackages);
+
+    public static IReadOnlyList<FontPackage> GetAvailableTextPackages() =>
+        GetAvailablePackages(BundledTextBundleDirectory, LocalizationPackageType.Text, KnownTextPackages);
+
+    private static IReadOnlyList<FontPackage> GetAvailablePackages(
+        string directory,
+        LocalizationPackageType packageType,
+        IReadOnlyDictionary<string, PackageMetadata> knownPackages)
     {
         var packages = new Dictionary<string, (FontPackage Package, int Order)>(StringComparer.OrdinalIgnoreCase);
-        ScanPackageDirectory(BundledFontBundleDirectory, packages);
-
-        return packages.Values
-            .OrderBy(item => item.Order)
-            .ThenBy(item => item.Package.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(item => item.Package)
-            .ToArray();
-    }
-
-    public static IReadOnlyList<FontPackage> GetAvailableTextPackages()
-    {
-        var packages = new Dictionary<string, (FontPackage Package, int Order)>(StringComparer.OrdinalIgnoreCase);
-        ScanPackageDirectory(BundledTextBundleDirectory, packages);
-
+        ScanPackageDirectory(directory, packageType, knownPackages, packages);
         return packages.Values
             .OrderBy(item => item.Order)
             .ThenBy(item => item.Package.Name, StringComparer.CurrentCultureIgnoreCase)
@@ -56,6 +71,8 @@ public static class LocalizationService
 
     private static void ScanPackageDirectory(
         string directory,
+        LocalizationPackageType packageType,
+        IReadOnlyDictionary<string, PackageMetadata> knownPackages,
         IDictionary<string, (FontPackage Package, int Order)> packages)
     {
         if (!Directory.Exists(directory)) return;
@@ -78,16 +95,27 @@ public static class LocalizationService
             RemoteFontPackage? remote = TryLoadPackageMetadata(archivePath);
             if (!string.IsNullOrWhiteSpace(remote?.Name)) name = remote.Name.Trim();
 
-            bool known = KnownPackages.TryGetValue(name, out var metadata);
+            bool known = knownPackages.TryGetValue(name, out PackageMetadata? metadata);
             string id = !string.IsNullOrWhiteSpace(remote?.Id)
                 ? remote.Id
-                : known ? metadata.Id : "font:" + name;
+                : known ? metadata!.Id : (packageType == LocalizationPackageType.Text ? "text:" : "font:") + name;
             string description = !string.IsNullOrWhiteSpace(remote?.Description)
                 ? remote.Description
                 : known
-                    ? metadata.Description
-                    : "本地字体包。安装前会检测旧字体和汉化内容，并安装到游戏根目录。";
-            int order = known ? metadata.Order : 100;
+                    ? metadata!.Description
+                    : packageType == LocalizationPackageType.Text
+                        ? "本地汉化文本包。安装前会检测并替换游戏目录中的旧 Text_ZH 内容。"
+                        : "本地字体包。安装前会检测旧字体，并安装到游戏根目录。";
+            string supportedVersion = !string.IsNullOrWhiteSpace(remote?.SupportedGameVersion)
+                ? remote.SupportedGameVersion
+                : known ? metadata!.SupportedGameVersion : "全版本通用";
+            string version = !string.IsNullOrWhiteSpace(remote?.Version)
+                ? remote.Version
+                : known ? metadata!.Version : "";
+            string englishName = !string.IsNullOrWhiteSpace(remote?.EnglishName)
+                ? remote.EnglishName
+                : known ? metadata!.EnglishName : "";
+            int order = known ? metadata!.Order : 100;
             string? previewPath = null;
             if (!string.IsNullOrWhiteSpace(remote?.PreviewFileName))
             {
@@ -97,7 +125,16 @@ public static class LocalizationService
             previewPath ??= FindPreview(directory, Path.GetFileNameWithoutExtension(archivePath));
 
             packages[id] = (
-                new FontPackage(id, name, description, archivePath, previewPath),
+                new FontPackage(
+                    id,
+                    name,
+                    description,
+                    archivePath,
+                    previewPath,
+                    packageType,
+                    supportedVersion,
+                    version,
+                    englishName),
                 order);
         }
     }
@@ -384,4 +421,11 @@ public static class LocalizationService
             .Select(name => Path.Combine(bundleDirectory, name))
             .FirstOrDefault(File.Exists);
     }
+    private sealed record PackageMetadata(
+        string Id,
+        string Description,
+        int Order,
+        string SupportedGameVersion,
+        string Version,
+        string EnglishName);
 }

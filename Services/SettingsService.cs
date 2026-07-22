@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Wpf_gdRunnerLite.Models;
 
 namespace Wpf_gdRunnerLite.Services;
@@ -12,7 +13,8 @@ public static class SettingsService
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        WriteIndented = true
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     public static string SettingsDirectory => Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
@@ -139,8 +141,17 @@ public static class SettingsService
         settings.FontPackageStates = settings.FontPackageStates is null
             ? new Dictionary<string, FontPackageState>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, FontPackageState>(settings.FontPackageStates, StringComparer.OrdinalIgnoreCase);
+        settings.TextPackageStates = settings.TextPackageStates is null
+            ? new Dictionary<string, FontPackageState>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, FontPackageState>(settings.TextPackageStates, StringComparer.OrdinalIgnoreCase);
 
-        string[] validPages = ["home", "account", "mods", "localization", "usage", "about"];
+        if (!Enum.IsDefined(settings.DownloadRouteMode)) settings.DownloadRouteMode = DownloadRouteMode.Auto;
+        if (!Enum.IsDefined(settings.NetworkProxyMode)) settings.NetworkProxyMode = NetworkProxyMode.System;
+        settings.CustomProxyAddress = string.IsNullOrWhiteSpace(settings.CustomProxyAddress)
+            ? null
+            : settings.CustomProxyAddress.Trim();
+
+        string[] validPages = ["home", "account", "mods", "localization", "settings", "usage", "about"];
         if (!validPages.Contains(settings.LastPage, StringComparer.OrdinalIgnoreCase))
         {
             settings.LastPage = "home";

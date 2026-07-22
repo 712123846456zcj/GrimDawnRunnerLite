@@ -16,6 +16,8 @@ public sealed class FontPackageManifest
     public DateTimeOffset? UpdatedAt { get; set; }
 
     public List<RemoteFontPackage> FontPackages { get; set; } = [];
+
+    public List<RemoteFontPackage> TextPackages { get; set; } = [];
 }
 
 public sealed class RemoteFontPackage
@@ -29,6 +31,8 @@ public sealed class RemoteFontPackage
     public string Version { get; set; } = "";
 
     public string Description { get; set; } = "";
+
+    public string SupportedGameVersion { get; set; } = "全版本通用";
 
     public string ArchiveUrl { get; set; } = "";
 
@@ -57,7 +61,8 @@ public sealed record FontDownloadProgress(
     string Stage,
     double Percentage,
     long BytesReceived,
-    long? TotalBytes);
+    long? TotalBytes,
+    string RouteName = "");
 
 public sealed record FontPackageDownloadResult(
     string PackageId,
@@ -69,4 +74,7 @@ public sealed record FontPackageDownloadResult(
 public sealed record FontUpdateCheckResult(
     FontPackageManifest Manifest,
     IReadOnlyList<FontPackageUpdate> Updates,
-    IReadOnlyDictionary<string, string> LocalHashes);
+    IReadOnlyDictionary<string, string> LocalHashes,
+    IReadOnlyList<FontPackageUpdate> TextUpdates,
+    IReadOnlyDictionary<string, string> TextLocalHashes,
+    string RouteName = "");

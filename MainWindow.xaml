@@ -271,6 +271,12 @@
                                     <TextBlock Text="汉化管理"/>
                                 </StackPanel>
                             </Button>
+                            <Button x:Name="NavSettingsButton" Tag="settings" Style="{StaticResource NavButtonStyle}" Click="NavigationButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Width="28" FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE713;"/>
+                                    <TextBlock Text="设置"/>
+                                </StackPanel>
+                            </Button>
                             <Button x:Name="NavUsageButton" Tag="usage" Style="{StaticResource NavButtonStyle}" Click="NavigationButton_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Width="28" FontFamily="Segoe MDL2 Assets" FontSize="15" Text="&#xE897;"/>
@@ -574,6 +580,8 @@
                                         <StackPanel Grid.Column="1">
                                             <TextBlock Foreground="#F1F3F5" FontSize="14" FontWeight="SemiBold" Text="汉化内容管理"/>
                                             <TextBlock Margin="0,5,0,0" Foreground="#8E97A2" FontSize="11.5" TextWrapping="Wrap" LineHeight="18" Text="汉化文本用于补充更详细的说明与标识；汉化字体用于改善中文显示风格。可下载和管理他们."/>
+                                            <TextBlock x:Name="LocalizationNetworkText" Margin="0,10,0,0" Foreground="#6E9FCD" FontSize="10.5" TextWrapping="Wrap" Text="更新线路：正在读取设置…"/>
+                                            <TextBlock Margin="0,6,0,0" Foreground="#697480" FontSize="10" LineHeight="16" TextWrapping="Wrap" Text="普通网络建议使用国内加速；已配置代理的用户可在左侧“设置”中选择系统代理或自定义代理。"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -666,6 +674,9 @@
                                                                 </Style>
                                                             </TextBlock.Style>
                                                         </TextBlock>
+                                                        <Border Margin="0,0,10,10" Padding="9,4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#D9181D24" BorderBrush="#5575A87F" BorderThickness="1" CornerRadius="9">
+                                                            <TextBlock Foreground="#A7D4AF" FontSize="9.5" FontWeight="SemiBold" Text="{Binding SupportedGameVersion}"/>
+                                                        </Border>
                                                     </Grid>
                                                     <StackPanel Grid.Row="1" Margin="18,16,18,18">
                                                         <TextBlock Foreground="#F3F0E9" FontSize="16" FontWeight="SemiBold" Text="{Binding Name}"/>
@@ -706,12 +717,15 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Foreground="#D2D7DD" FontSize="13" FontWeight="SemiBold" Text="汉化文本"/>
-                                            <TextBlock Margin="0,5,24,0" Foreground="#707A85" FontSize="10.5" TextWrapping="Wrap" Text="用于补充任务、装备和系统标识的详细说明。当前版本使用本地内置文本包。"/>
+                                            <TextBlock Margin="0,5,24,0" Foreground="#707A85" FontSize="10.5" TextWrapping="Wrap" Text="用于补充任务、装备和系统标识的详细说明，支持内置包与在线下载包。"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                             <Border Padding="10,5" VerticalAlignment="Center" Background="#1D6AB0FF" BorderBrush="#406AB0FF" BorderThickness="1" CornerRadius="12">
                                                 <TextBlock x:Name="TextPackageCountText" Foreground="#B9DAFF" FontSize="10" Text="正在扫描…"/>
                                             </Border>
+                                            <Button x:Name="CheckTextUpdatesButton" MinWidth="94" Height="32" Margin="10,0,0,0" Padding="12,0" Style="{StaticResource UtilityButtonStyle}" Click="CheckTextUpdatesButton_Click">
+                                                <TextBlock x:Name="TextUpdateButtonText" FontSize="10.5" FontWeight="SemiBold" Text="检查更新"/>
+                                            </Button>
                                             <Button x:Name="OpenTextPackagesButton" MinWidth="94" Height="32" Margin="10,0,0,0" Padding="12,0" Style="{StaticResource UtilityButtonStyle}" Click="OpenTextPackagesButton_Click">
                                                 <TextBlock FontSize="10.5" FontWeight="SemiBold" Text="文本包目录"/>
                                             </Button>
@@ -766,6 +780,9 @@
                                                                 </Style>
                                                             </TextBlock.Style>
                                                         </TextBlock>
+                                                        <Border Margin="0,0,10,10" Padding="9,4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="#D9181D24" BorderBrush="#5575A87F" BorderThickness="1" CornerRadius="9">
+                                                            <TextBlock Foreground="#A7D4AF" FontSize="9.5" FontWeight="SemiBold" Text="{Binding SupportedGameVersion}"/>
+                                                        </Border>
                                                     </Grid>
                                                     <StackPanel Grid.Row="1" Margin="18,16,18,18">
                                                         <TextBlock Foreground="#F3F0E9" FontSize="16" FontWeight="SemiBold" Text="{Binding Name}"/>
@@ -795,6 +812,81 @@
                                         <TextBlock HorizontalAlignment="Center" Foreground="#D7A84B" FontFamily="Segoe MDL2 Assets" FontSize="26" Text="&#xE838;"/>
                                         <TextBlock Margin="0,12,0,0" HorizontalAlignment="Center" Foreground="#D7DCE2" FontSize="13" FontWeight="SemiBold" Text="没有发现汉化文本包"/>
                                         <TextBlock Margin="0,6,0,0" HorizontalAlignment="Center" Foreground="#77818C" FontSize="10.5" Text="放入 ZIP 和同名 PNG 后点击重新检测"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                        <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                            <StackPanel MaxWidth="820" HorizontalAlignment="Left">
+                                <Border Style="{StaticResource PanelStyle}" Padding="22">
+                                    <StackPanel>
+                                        <TextBlock Foreground="#F1F3F5" FontSize="16" FontWeight="SemiBold" Text="下载与更新线路"/>
+                                        <TextBlock Margin="0,7,0,0" Foreground="#77818C" FontSize="10.8" TextWrapping="Wrap" Text="普通用户保持自动选择即可。程序优先使用国内加速，连接失败后再切换 GitHub 官方线路。"/>
+                                        <TextBlock x:Name="NetworkRouteSummaryText" Margin="0,12,0,0" Foreground="#6E9FCD" FontSize="10.5" TextWrapping="Wrap"/>
+
+                                        <Border Margin="0,17,0,0" Padding="16" Background="#11161D" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="10">
+                                            <StackPanel>
+                                                <RadioButton x:Name="AutoRouteRadioButton" GroupName="DownloadRoute" Foreground="#E1E5E9" FontSize="12" Checked="NetworkSetting_Checked" Content="自动选择（推荐）"/>
+                                                <TextBlock Margin="24,6,0,0" Foreground="#78838E" FontSize="10.2" TextWrapping="Wrap" Text="优先使用国内加速；失败时使用下方设置的 GitHub 官方连接方式。"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="0,9,0,0" Padding="16" Background="#11161D" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="10">
+                                            <StackPanel>
+                                                <RadioButton x:Name="AcceleratedRouteRadioButton" GroupName="DownloadRoute" Foreground="#E1E5E9" FontSize="12" Checked="NetworkSetting_Checked" Content="仅国内加速"/>
+                                                <TextBlock Margin="24,6,0,0" Foreground="#78838E" FontSize="10.2" Text="只使用 gh-proxy 加速线路。"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="0,9,0,0" Padding="16" Background="#11161D" BorderBrush="#2AFFFFFF" BorderThickness="1" CornerRadius="10">
+                                            <StackPanel>
+                                                <RadioButton x:Name="OfficialRouteRadioButton" GroupName="DownloadRoute" Foreground="#E1E5E9" FontSize="12" Checked="NetworkSetting_Checked" Content="仅 GitHub 官方"/>
+                                                <TextBlock Margin="24,6,0,0" Foreground="#78838E" FontSize="10.2" Text="跳过国内加速，使用下面选择的代理方式访问 GitHub。"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="0,14,0,0" Style="{StaticResource PanelStyle}" Padding="22">
+                                    <StackPanel>
+                                        <TextBlock Foreground="#F1F3F5" FontSize="16" FontWeight="SemiBold" Text="高级网络设置"/>
+                                        <TextBlock Margin="0,7,0,0" Foreground="#77818C" FontSize="10.8" TextWrapping="Wrap" Text="这里的代理用于 GitHub 官方线路。国内加速线路始终直接连接，不要求安装 Git 或代理软件。"/>
+                                        <TextBlock x:Name="SystemProxyStatusText" Margin="0,12,0,0" Foreground="#7F8994" FontSize="10.5"/>
+
+                                        <StackPanel Margin="0,17,0,0">
+                                            <RadioButton x:Name="SystemProxyRadioButton" GroupName="ProxyMode" Foreground="#E1E5E9" FontSize="12" Checked="NetworkSetting_Checked" Content="跟随 Windows 系统代理"/>
+                                            <TextBlock Margin="24,6,0,0" Foreground="#78838E" FontSize="10.2" TextWrapping="Wrap" Text="自动读取 Clash、V2Ray 或 Windows 当前启用的系统代理；未启用时按系统网络直连。"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,16,0,0">
+                                            <RadioButton x:Name="DirectProxyRadioButton" GroupName="ProxyMode" Foreground="#E1E5E9" FontSize="12" Checked="NetworkSetting_Checked" Content="不使用代理"/>
+                                            <TextBlock Margin="24,6,0,0" Foreground="#78838E" FontSize="10.2" Text="GitHub 官方线路强制直接连接。"/>
+                                        </StackPanel>
+                                        <StackPanel Margin="0,16,0,0">
+                                            <RadioButton x:Name="CustomProxyRadioButton" GroupName="ProxyMode" Foreground="#E1E5E9" FontSize="12" Checked="NetworkSetting_Checked" Content="使用自定义代理"/>
+                                            <TextBlock Margin="24,6,0,0" Foreground="#78838E" FontSize="10.2" Text="适合没有开启系统代理、但知道本地 HTTP 代理端口的用户。"/>
+                                            <Grid Margin="24,11,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="12"/>
+                                                    <ColumnDefinition Width="132"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox x:Name="CustomProxyTextBox" Style="{StaticResource InputStyle}" TextChanged="CustomProxyTextBox_TextChanged" ToolTip="例如 127.0.0.1:7890"/>
+                                                <Button x:Name="TestNetworkConnectionButton" Grid.Column="2" Style="{StaticResource UtilityButtonStyle}" Click="TestNetworkConnectionButton_Click" Content="测试 GitHub 连接"/>
+                                            </Grid>
+                                            <TextBlock Margin="24,7,0,0" Foreground="#626D78" FontSize="9.8" Text="示例：127.0.0.1:7890 或 http://127.0.0.1:7890"/>
+                                        </StackPanel>
+
+                                        <Border Margin="0,20,0,0" Padding="14" Background="#10151B" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="9">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Ellipse x:Name="NetworkSettingsStatusDot" Width="7" Height="7" Margin="0,0,9,0" Fill="#6F7882"/>
+                                                    <TextBlock x:Name="NetworkSettingsStatusText" Foreground="#9AA3AD" FontSize="10.5" TextWrapping="Wrap" Text="修改后点击保存。"/>
+                                                </StackPanel>
+                                                <Button x:Name="SaveNetworkSettingsButton" Grid.Column="1" Width="112" Height="36" Margin="18,0,0,0" Style="{StaticResource PrimaryButtonStyle}" Click="SaveNetworkSettingsButton_Click" Content="保存网络设置"/>
+                                            </Grid>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
