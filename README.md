@@ -1,6 +1,7 @@
 # Grim Dawn Runner Lite
 
 一个面向《恐怖黎明》（Grim Dawn）玩家的轻量本地启动器。
+为即将到来的恐怖黎明 1.3正式版做好准备~
 
 <p align="center">
   <img src="preview/1.png" width="48%" />
