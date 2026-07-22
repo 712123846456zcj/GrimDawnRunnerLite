@@ -22,6 +22,8 @@ public partial class MainWindow : Window
     private static readonly Brush NavSelectedBrush = new SolidColorBrush(Color.FromArgb(48, 215, 168, 75));
     private static readonly Brush NavNormalBrush = Brushes.Transparent;
     private static readonly Regex SteamIdRegex = new(@"^\d{17}$", RegexOptions.Compiled);
+    private const string OpenSourceUrl = "https://github.com/712123846456zcj/GrimDawnRunnerLite";
+    private const string UpdateUrl = "https://github.com/712123846456zcj/GrimDawnRunnerLite/releases";
 
     private string _gameRoot;
     private readonly string _forwardedArguments;
@@ -890,6 +892,16 @@ public partial class MainWindow : Window
             LocalizationStatusText.Text = $"打开游戏文本目录失败：{ex.Message}";
         }
     }
+
+    private void OpenSourceLink_Click(object sender, RoutedEventArgs e) => OpenUrl(OpenSourceUrl);
+
+    private void OpenUpdateLink_Click(object sender, RoutedEventArgs e) => OpenUrl(UpdateUrl);
+
+    private static void OpenUrl(string url) => Process.Start(new ProcessStartInfo
+    {
+        FileName = url,
+        UseShellExecute = true
+    });
 
     private void OpenUserSettingsButton_Click(object sender, RoutedEventArgs e)
     {

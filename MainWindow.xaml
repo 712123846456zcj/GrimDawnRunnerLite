@@ -211,7 +211,7 @@
                     <Image Width="20" Height="20" Source="Assets/GD1.png"/>
                     <TextBlock Margin="9,0,0,0" VerticalAlignment="Center" Foreground="#E7E9ED" FontSize="12.5" FontWeight="SemiBold" Text="GRIM DAWN RUNNER LITE"/>
                     <Border Margin="10,0,0,0" Padding="7,2" CornerRadius="4" Background="#23D7A84B">
-                        <TextBlock Foreground="#DDBB70" FontSize="10" FontWeight="SemiBold" Text="1.1"/>
+                        <TextBlock Foreground="#DDBB70" FontSize="10" FontWeight="SemiBold" Text="1.0"/>
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="4" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
@@ -855,7 +855,7 @@
                                         <Image Width="72" Height="72" Source="Assets/GD2.png"/>
                                         <StackPanel Margin="18,5,0,0">
                                             <TextBlock Foreground="White" FontSize="21" FontWeight="SemiBold" Text="Grim Dawn Runner Lite"/>
-                                            <TextBlock Margin="0,6,0,0" Foreground="#D7A84B" FontSize="11" Text="VERSION 1.1 · .NET 10 WPF"/>
+                                            <TextBlock Margin="0,6,0,0" Foreground="#D7A84B" FontSize="11" Text="VERSION 1.0 · .NET 10 WPF"/>
                                             <TextBlock Margin="0,5,0,0" Foreground="#77818C" FontSize="11" Text="启动、联机配置与后续内容管理工具"/>
                                         </StackPanel>
                                     </StackPanel>
@@ -864,6 +864,15 @@
                                     <TextBlock x:Name="AboutRootText" Margin="0,6,0,0" Foreground="#D2D6DC" FontSize="11.5" TextWrapping="Wrap"/>
                                     <TextBlock Margin="0,20,0,0" Foreground="#858E99" FontSize="10.5" Text="发布形式"/>
                                     <TextBlock Margin="0,6,0,0" Foreground="#D2D6DC" FontSize="11.5" Text="win-x64 / win-x86 自包含单文件 EXE"/>
+                                    <TextBlock Margin="0,20,0,0" Foreground="#858E99" FontSize="10.5" Text="项目链接"/>
+                                    <TextBlock Margin="0,6,0,0" Foreground="#D2D6DC" FontSize="11.5" TextWrapping="Wrap">
+                                        <Run Text="开源地址："/>
+                                        <Hyperlink Click="OpenSourceLink_Click">GitHub 仓库</Hyperlink>
+                                    </TextBlock>
+                                    <TextBlock Margin="0,6,0,0" Foreground="#D2D6DC" FontSize="11.5" TextWrapping="Wrap">
+                                        <Run Text="更新地址："/>
+                                        <Hyperlink Click="OpenUpdateLink_Click">Releases 页面</Hyperlink>
+                                    </TextBlock>
                                 </StackPanel>
                             </Border>
                         </Grid>
