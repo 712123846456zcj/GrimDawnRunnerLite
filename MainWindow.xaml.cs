@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private readonly string _forwardedArguments;
     private readonly LauncherSettings _settings;
     private Dictionary<string, FontPackage> _fontPackages = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, FontPackage> _textPackages = new(StringComparer.OrdinalIgnoreCase);
     private bool _isLocalizationBusy;
     private bool _fontUpdateCheckInProgress;
     private IReadOnlyList<FontPackageUpdate> _availableFontUpdates = [];
@@ -488,25 +489,43 @@ public partial class MainWindow : Window
         FontPackageCountText.Text = $"已发现 {packages.Count} 款";
         EmptyFontPackagesPanel.Visibility = packages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        int installedCount = LocalizationService.CountInstalledFontFiles(_gameRoot);
+        IReadOnlyList<FontPackage> textPackages = LocalizationService.GetAvailableTextPackages();
+        _textPackages = textPackages.ToDictionary(package => package.Id, StringComparer.OrdinalIgnoreCase);
+        TextPackagesItemsControl.ItemsSource = textPackages.Select(CreateTextPackageCard).ToArray();
+        TextPackageCountText.Text = $"已发现 {textPackages.Count} 款";
+        EmptyTextPackagesPanel.Visibility = textPackages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        int installedFontCount = LocalizationService.CountInstalledFontFiles(_gameRoot);
+        int installedTextCount = LocalizationService.CountInstalledTextFiles(_gameRoot);
         IReadOnlyList<LocalizationContentItem> existing = LocalizationService.DetectExistingLocalization(_gameRoot);
-        if (installedCount > 0)
+        if (installedFontCount > 0 && installedTextCount > 0)
         {
             string packageName = _settings.InstalledFontPackageName ?? "已有字体";
             LocalizationStatusDot.Fill = AvailableBrush;
-            LocalizationStatusText.Text = $"当前已启用：{packageName}，游戏根目录中有 {installedCount} 个 FNT 文件。";
+            LocalizationStatusText.Text = $"当前已启用：{packageName}，字体 {installedFontCount} 个文件，汉化文本 {installedTextCount} 个文件。";
+        }
+        else if (installedFontCount > 0)
+        {
+            string packageName = _settings.InstalledFontPackageName ?? "已有字体";
+            LocalizationStatusDot.Fill = AvailableBrush;
+            LocalizationStatusText.Text = $"当前已启用：{packageName}，游戏根目录中有 {installedFontCount} 个 FNT 文件。";
+        }
+        else if (installedTextCount > 0)
+        {
+            LocalizationStatusDot.Fill = AvailableBrush;
+            LocalizationStatusText.Text = $"当前已启用汉化文本，游戏根目录中有 {installedTextCount} 个文本文件。";
         }
         else if (existing.Count > 0)
         {
             LocalizationStatusDot.Fill = WarningBrush;
-            LocalizationStatusText.Text = $"检测到 {existing.Count} 处旧汉化内容；安装字体时会先请求清理确认。";
+            LocalizationStatusText.Text = $"检测到 {existing.Count} 处旧汉化内容；安装字体或文本时会先请求清理确认。";
         }
         else
         {
             LocalizationStatusDot.Fill = NeutralBrush;
-            LocalizationStatusText.Text = packages.Count == 0
-                ? "没有扫描到字体 ZIP，请把 ZIP 和同名预览图放入字体包目录。"
-                : "尚未在游戏根目录启用自定义中文字体。";
+            LocalizationStatusText.Text = packages.Count == 0 && textPackages.Count == 0
+                ? "没有扫描到本地汉化包，请把 ZIP 和同名预览图放入对应目录。"
+                : "尚未在游戏根目录启用汉化字体或汉化文本。";
         }
     }
 
@@ -546,6 +565,47 @@ public partial class MainWindow : Window
             StatusBrush = statusBrush,
             ActionText = actionText,
             PreviewHint = $"等待游戏内字体效果截图\n{package.Name}.png",
+            PreviewImage = LoadPreviewImage(package.PreviewPath),
+            CanInstall = archiveExists && !_isLocalizationBusy,
+            DeleteVisibility = installed ? Visibility.Visible : Visibility.Collapsed
+        };
+    }
+
+    private FontPackageCardViewModel CreateTextPackageCard(FontPackage package)
+    {
+        bool archiveExists = File.Exists(package.ArchivePath);
+        bool installed = LocalizationService.CountInstalledTextFiles(_gameRoot) > 0;
+
+        string statusText;
+        Brush statusBrush;
+        string actionText;
+        if (installed)
+        {
+            statusText = "当前已启用";
+            statusBrush = AvailableBrush;
+            actionText = "重新安装";
+        }
+        else if (archiveExists)
+        {
+            double size = new FileInfo(package.ArchivePath).Length / 1024d / 1024d;
+            statusText = $"本地文本包 · {size:0.0} MB";
+            statusBrush = new SolidColorBrush(Color.FromRgb(142, 151, 162));
+            actionText = "启用文本";
+        }
+        else
+        {
+            statusText = $"缺少发行文件：{Path.GetFileName(package.ArchivePath)}";
+            statusBrush = MissingBrush;
+            actionText = "文本包缺失";
+        }
+
+        return new FontPackageCardViewModel
+        {
+            Package = package,
+            StatusText = statusText,
+            StatusBrush = statusBrush,
+            ActionText = actionText,
+            PreviewHint = $"等待游戏内文本效果截图\n{package.Name}.png",
             PreviewImage = LoadPreviewImage(package.PreviewPath),
             CanInstall = archiveExists && !_isLocalizationBusy,
             DeleteVisibility = installed ? Visibility.Visible : Visibility.Collapsed
@@ -666,13 +726,102 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void InstallTextPackageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string packageId } ||
+            !_textPackages.TryGetValue(packageId, out FontPackage? package)) return;
+
+        IReadOnlyList<LocalizationContentItem> existingTexts = LocalizationService.DetectExistingTexts(_gameRoot);
+        bool cleanExisting = existingTexts.Count > 0;
+        string paths = existingTexts.Count > 0
+            ? string.Join(Environment.NewLine, existingTexts.Select(item => $"• {item.Description}：{item.Path}"))
+            : "未检测到旧的汉化文本目录。";
+
+        MessageBoxResult answer = MessageBox.Show(
+            this,
+            $"汉化文本作者：QQ群1070483622@橙子\n\n检测结果：\n{paths}\n\n安装 {package.Name} 会把压缩包中的 Text_ZH 内容写入游戏根目录。是否继续？",
+            "安装汉化文本",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information);
+        if (answer != MessageBoxResult.Yes)
+        {
+            LocalizationStatusDot.Fill = NeutralBrush;
+            LocalizationStatusText.Text = "已取消汉化文本安装，现有文件保持不变。";
+            return;
+        }
+
+        SetLocalizationBusy(true, $"正在安装 {package.Name}，请稍候…");
+        try
+        {
+            FontInstallationResult result = await Task.Run(() =>
+                LocalizationService.InstallTextPackage(package, _gameRoot, cleanExisting));
+
+            RefreshLocalizationPage();
+            SetOperationStatus($"已启用汉化文本：{package.Name}", AvailableBrush);
+
+            MessageBox.Show(
+                this,
+                $"{package.Name} 安装完成。\n\n已写入 {result.InstalledFileCount} 个文本文件：\n{result.DestinationDirectory}",
+                "汉化文本安装完成",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            LocalizationStatusDot.Fill = MissingBrush;
+            LocalizationStatusText.Text = $"汉化文本安装失败：{ex.Message}";
+            SetOperationStatus($"汉化文本安装失败：{ex.Message}", MissingBrush);
+            MessageBox.Show(this, $"安装 {package.Name} 时发生错误：\n\n{ex.Message}", "汉化文本安装失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetLocalizationBusy(false, null);
+            RefreshLocalizationPage();
+        }
+    }
+
+    private async void DeleteTextPackageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string packageId } ||
+            !_textPackages.TryGetValue(packageId, out FontPackage? package)) return;
+
+        MessageBoxResult answer = MessageBox.Show(
+            this,
+            $"是否删除当前启用的 {package.Name}？\n\n只会删除游戏根目录下的 settings\\Text_ZH 文件夹，不会删除 Fonts 或其他自定义设置。",
+            "删除汉化文本",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes) return;
+
+        SetLocalizationBusy(true, $"正在删除 {package.Name}…");
+        try
+        {
+            bool removed = await Task.Run(() => LocalizationService.RemoveGameTexts(_gameRoot));
+            SetOperationStatus(removed ? $"已删除汉化文本：{package.Name}" : "没有找到已安装的汉化文本文件", removed ? AvailableBrush : NeutralBrush);
+        }
+        catch (Exception ex)
+        {
+            LocalizationStatusDot.Fill = MissingBrush;
+            LocalizationStatusText.Text = $"删除汉化文本失败：{ex.Message}";
+            MessageBox.Show(this, $"删除汉化文本时发生错误：\n\n{ex.Message}", "删除汉化文本", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetLocalizationBusy(false, null);
+            RefreshLocalizationPage();
+        }
+    }
+
     private void SetLocalizationBusy(bool busy, string? message)
     {
         _isLocalizationBusy = busy;
         FontPackagesItemsControl.ItemsSource = _fontPackages.Values.Select(CreateFontPackageCard).ToArray();
+        TextPackagesItemsControl.ItemsSource = _textPackages.Values.Select(CreateTextPackageCard).ToArray();
         RefreshLocalizationButton.IsEnabled = !busy;
         OpenFontPackagesButton.IsEnabled = !busy;
+        OpenTextPackagesButton.IsEnabled = !busy;
         OpenGameFontsButton.IsEnabled = !busy;
+        OpenGameTextsButton.IsEnabled = !busy;
         OpenUserSettingsButton.IsEnabled = !busy;
         CheckFontUpdatesButton.IsEnabled = !busy && !_fontUpdateCheckInProgress;
         if (!string.IsNullOrWhiteSpace(message))
@@ -698,6 +847,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OpenTextPackagesButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(LocalizationService.BundledTextBundleDirectory);
+            OpenDirectory(LocalizationService.BundledTextBundleDirectory);
+        }
+        catch (Exception ex)
+        {
+            LocalizationStatusDot.Fill = MissingBrush;
+            LocalizationStatusText.Text = $"打开文本包目录失败：{ex.Message}";
+        }
+    }
+
     private void OpenGameFontsButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -710,6 +873,21 @@ public partial class MainWindow : Window
         {
             LocalizationStatusDot.Fill = MissingBrush;
             LocalizationStatusText.Text = $"打开游戏字体目录失败：{ex.Message}";
+        }
+    }
+
+    private void OpenGameTextsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string directory = LocalizationService.GetGameTextDirectory(_gameRoot);
+            Directory.CreateDirectory(directory);
+            OpenDirectory(directory);
+        }
+        catch (Exception ex)
+        {
+            LocalizationStatusDot.Fill = MissingBrush;
+            LocalizationStatusText.Text = $"打开游戏文本目录失败：{ex.Message}";
         }
     }
 

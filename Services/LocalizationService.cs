@@ -16,6 +16,7 @@ public static class LocalizationService
 
     public static string BundledFontBundleDirectory => Path.Combine(AppContext.BaseDirectory, "Assets", "FontBundle");
 
+    public static string BundledTextBundleDirectory => Path.Combine(AppContext.BaseDirectory, "Assets", "TextBundle");
 
     public static string UserGameSettingsDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -27,10 +28,24 @@ public static class LocalizationService
 
     public static string GetGameFontDirectory(string gameRoot) => Path.Combine(GetGameSettingsDirectory(gameRoot), "Fonts", "zh");
 
+    public static string GetGameTextDirectory(string gameRoot) => Path.Combine(GetGameSettingsDirectory(gameRoot), "Text_ZH");
+
     public static IReadOnlyList<FontPackage> GetAvailableFontPackages()
     {
         var packages = new Dictionary<string, (FontPackage Package, int Order)>(StringComparer.OrdinalIgnoreCase);
         ScanPackageDirectory(BundledFontBundleDirectory, packages);
+
+        return packages.Values
+            .OrderBy(item => item.Order)
+            .ThenBy(item => item.Package.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(item => item.Package)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<FontPackage> GetAvailableTextPackages()
+    {
+        var packages = new Dictionary<string, (FontPackage Package, int Order)>(StringComparer.OrdinalIgnoreCase);
+        ScanPackageDirectory(BundledTextBundleDirectory, packages);
 
         return packages.Values
             .OrderBy(item => item.Order)
@@ -119,6 +134,20 @@ public static class LocalizationService
         .ToArray();
     }
 
+    public static IReadOnlyList<LocalizationContentItem> DetectExistingTexts(string gameRoot)
+    {
+        string gameSettings = GetGameSettingsDirectory(gameRoot);
+        string userSettings = UserGameSettingsDirectory;
+        return new[]
+        {
+            new LocalizationContentItem(Path.Combine(gameSettings, "Text_ZH"), "游戏根目录汉化文本"),
+            new LocalizationContentItem(Path.Combine(userSettings, "Text_ZH"), "本地存档设置汉化文本")
+        }
+        .Where(item => Directory.Exists(item.Path))
+        .DistinctBy(item => Path.GetFullPath(item.Path), StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    }
+
     public static IReadOnlyList<LocalizationContentItem> DetectExistingLocalization(string gameRoot)
     {
         string gameSettings = GetGameSettingsDirectory(gameRoot);
@@ -146,11 +175,27 @@ public static class LocalizationService
         return true;
     }
 
+    public static bool RemoveGameTexts(string gameRoot)
+    {
+        string textDirectory = GetGameTextDirectory(gameRoot);
+        if (!Directory.Exists(textDirectory)) return false;
+        Directory.Delete(textDirectory, true);
+        return true;
+    }
+
     public static int CountInstalledFontFiles(string gameRoot)
     {
         string directory = GetGameFontDirectory(gameRoot);
         return Directory.Exists(directory)
             ? Directory.EnumerateFiles(directory, "*.fnt", SearchOption.TopDirectoryOnly).Count()
+            : 0;
+    }
+
+    public static int CountInstalledTextFiles(string gameRoot)
+    {
+        string directory = GetGameTextDirectory(gameRoot);
+        return Directory.Exists(directory)
+            ? Directory.EnumerateFiles(directory, "*.txt", SearchOption.AllDirectories).Count()
             : 0;
     }
 
@@ -208,6 +253,60 @@ public static class LocalizationService
         }
     }
 
+    public static FontInstallationResult InstallTextPackage(
+        FontPackage package,
+        string gameRoot,
+        bool cleanExistingTexts)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        if (!GameLocationService.IsValidGameRoot(gameRoot))
+        {
+            throw new DirectoryNotFoundException("当前游戏根目录无效，请重新选择 Grim Dawn 主程序。");
+        }
+        if (!File.Exists(package.ArchivePath))
+        {
+            throw new FileNotFoundException("汉化文本压缩包不存在。", package.ArchivePath);
+        }
+
+        string gameSettings = GetGameSettingsDirectory(gameRoot);
+        string stagingRoot = Path.Combine(gameSettings, $".gdrl-text-stage-{Guid.NewGuid():N}");
+        string stagingTextDirectory = Path.Combine(stagingRoot, "Text_ZH");
+        string destination = GetGameTextDirectory(gameRoot);
+
+        try
+        {
+            Directory.CreateDirectory(stagingTextDirectory);
+            int installedCount = ExtractTextFiles(package.ArchivePath, stagingTextDirectory);
+            if (installedCount == 0)
+            {
+                throw new InvalidDataException("压缩包中没有找到 Text_ZH 下的文本文件。");
+            }
+
+            if (cleanExistingTexts)
+            {
+                foreach (LocalizationContentItem item in DetectExistingTexts(gameRoot))
+                {
+                    Directory.Delete(item.Path, true);
+                }
+            }
+            else if (Directory.Exists(destination))
+            {
+                Directory.Delete(destination, true);
+            }
+
+            string destinationParent = Directory.GetParent(destination)?.FullName
+                ?? throw new InvalidOperationException("汉化文本安装目录无效。");
+            Directory.CreateDirectory(destinationParent);
+            Directory.Move(stagingTextDirectory, destination);
+
+            return new FontInstallationResult(destination, installedCount);
+        }
+        finally
+        {
+            if (Directory.Exists(stagingRoot)) Directory.Delete(stagingRoot, true);
+        }
+    }
+
     private static int ExtractFontFiles(string archivePath, string destinationDirectory)
     {
         int installedCount = 0;
@@ -228,6 +327,40 @@ public static class LocalizationService
             string destinationPath = Path.Combine(destinationDirectory, fileName);
             using Stream input = entry.Open();
             using FileStream output = new(destinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            input.CopyTo(output);
+            installedCount++;
+        }
+
+        return installedCount;
+    }
+
+    private static int ExtractTextFiles(string archivePath, string destinationDirectory)
+    {
+        int installedCount = 0;
+        var relativePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        using ZipArchive archive = ZipFile.OpenRead(archivePath);
+        foreach (ZipArchiveEntry entry in archive.Entries)
+        {
+            string normalized = entry.FullName.Replace('\\', '/');
+            int anchorIndex = normalized.IndexOf("Text_ZH/", StringComparison.OrdinalIgnoreCase);
+            if (anchorIndex < 0) continue;
+
+            string relativePath = normalized[(anchorIndex + "Text_ZH/".Length)..].TrimStart('/');
+            if (string.IsNullOrWhiteSpace(relativePath)) continue;
+            if (relativePath.EndsWith('/')) continue;
+
+            string fullDestination = Path.Combine(destinationDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            string? parent = Path.GetDirectoryName(fullDestination);
+            if (!string.IsNullOrWhiteSpace(parent)) Directory.CreateDirectory(parent);
+
+            if (!relativePaths.Add(relativePath))
+            {
+                throw new InvalidDataException($"文本包中包含重复文件：{relativePath}");
+            }
+
+            using Stream input = entry.Open();
+            using FileStream output = new(fullDestination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             input.CopyTo(output);
             installedCount++;
         }
