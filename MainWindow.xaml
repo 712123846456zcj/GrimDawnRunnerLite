@@ -588,10 +588,10 @@
 
                                 <Border Margin="0,14,0,0" Padding="16" Background="#11151B" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="10">
                                     <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
                                                 <Ellipse x:Name="LocalizationStatusDot" Width="7" Height="7" Margin="0,0,9,0" VerticalAlignment="Center" Fill="#6F7882"/>
@@ -602,12 +602,12 @@
                                             <TextBlock Margin="16,7,0,0" Foreground="#66717C" FontSize="9.5" Text="本地存档设置目录（安装前也会检查旧字体与 text_ZH）"/>
                                             <TextBlock x:Name="LocalizationUserPathText" Margin="16,3,0,0" Foreground="#8B949F" FontSize="10" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <StackPanel Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center">
-                                            <Button x:Name="RefreshLocalizationButton" Width="112" Style="{StaticResource UtilityButtonStyle}" Click="RefreshLocalizationButton_Click" Content="重新检测"/>
-                                            <Button x:Name="OpenFontPackagesButton" Width="112" Margin="0,8,0,0" Style="{StaticResource UtilityButtonStyle}" Click="OpenFontPackagesButton_Click" Content="字体包目录"/>
-                                            <Button x:Name="OpenGameFontsButton" Width="112" Margin="0,8,0,0" Style="{StaticResource UtilityButtonStyle}" Click="OpenGameFontsButton_Click" Content="游戏字体目录"/>
-                                            <Button x:Name="OpenUserSettingsButton" Width="112" Margin="0,8,0,0" Style="{StaticResource UtilityButtonStyle}" Click="OpenUserSettingsButton_Click" Content="本地设置目录"/>
-                                        </StackPanel>
+                                        <UniformGrid Grid.Row="1" Margin="16,14,0,0" Columns="4">
+                                            <Button x:Name="RefreshLocalizationButton" Margin="0,0,8,0" Style="{StaticResource UtilityButtonStyle}" Click="RefreshLocalizationButton_Click" Content="重新检测"/>
+                                            <Button x:Name="OpenFontPackagesButton" Margin="0,0,8,0" Style="{StaticResource UtilityButtonStyle}" Click="OpenFontPackagesButton_Click" Content="字体包目录"/>
+                                            <Button x:Name="OpenGameFontsButton" Margin="0,0,8,0" Style="{StaticResource UtilityButtonStyle}" Click="OpenGameFontsButton_Click" Content="游戏字体目录"/>
+                                            <Button x:Name="OpenUserSettingsButton" Style="{StaticResource UtilityButtonStyle}" Click="OpenUserSettingsButton_Click" Content="本地设置目录"/>
+                                        </UniformGrid>
                                     </Grid>
                                 </Border>
 
