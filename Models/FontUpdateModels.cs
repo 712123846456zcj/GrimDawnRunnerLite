@@ -28,6 +28,10 @@ public sealed class RemoteFontPackage
 
     public string EnglishName { get; set; } = "";
 
+    public string AuthorName { get; set; } = "";
+
+    public string SharerName { get; set; } = "";
+
     public string Version { get; set; } = "";
 
     public string Description { get; set; } = "";

@@ -31,6 +31,8 @@
 - Release Tag：`text-v1.0.0`
 - 中文名称：`词缀职业显示增强`
 - 英文名称：`Affixes for professions are enhanced`
+- 作者：留空
+- 分享者：`发光的洛伦兹`
 - 远端 ZIP：`Affixes.for.professions.are.enhanced.zip`
 - 远端预览：`Affixes.for.professions.are.enhanced.png`
 - 下载后本地名称：`词缀职业显示增强.zip/png`
@@ -49,7 +51,16 @@
 
 字体一般填写 `全版本通用`；汉化文本根据实际适配版本填写。
 
-## 5. 更新字段
+## 5. 作者与分享者字段
+
+汉化文本包可在清单中填写：
+
+- `authorName`：文本作者。
+- `sharerName`：资源分享者。
+
+客户端下载后会把两个字段写入同名 `.package.json`，安装确认弹窗按照 `authorName` → `sharerName` → `未知作者` 的顺序显示署名。手动放入 ZIP/PNG 时，也可以创建同名 `.package.json` 提供这些字段。内置文本包的作者信息由程序内置。
+
+## 6. 更新字段
 
 发布新文件时同步修改：
 

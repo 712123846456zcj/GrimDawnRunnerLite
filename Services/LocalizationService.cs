@@ -23,7 +23,8 @@ public static class LocalizationService
                 0,
                 "v1.3.0.0",
                 "1.10",
-                "Set descriptions v1.10"),
+                "Set descriptions v1.10",
+                "QQ群1070483622@橙子"),
             ["词缀职业显示增强"] = new(
                 "affixes-for-professions-enhanced",
                 "增强装备词缀与职业相关文本的显示和标识，便于查看构筑信息。",
@@ -115,6 +116,12 @@ public static class LocalizationService
             string englishName = !string.IsNullOrWhiteSpace(remote?.EnglishName)
                 ? remote.EnglishName
                 : known ? metadata!.EnglishName : "";
+            string authorName = !string.IsNullOrWhiteSpace(remote?.AuthorName)
+                ? remote.AuthorName.Trim()
+                : known ? metadata!.AuthorName : "";
+            string sharerName = !string.IsNullOrWhiteSpace(remote?.SharerName)
+                ? remote.SharerName.Trim()
+                : known ? metadata!.SharerName : "";
             int order = known ? metadata!.Order : 100;
             string? previewPath = null;
             if (!string.IsNullOrWhiteSpace(remote?.PreviewFileName))
@@ -134,7 +141,9 @@ public static class LocalizationService
                     packageType,
                     supportedVersion,
                     version,
-                    englishName),
+                    englishName,
+                    authorName,
+                    sharerName),
                 order);
         }
     }
@@ -155,6 +164,21 @@ public static class LocalizationService
         {
             return null;
         }
+    }
+
+    public static string GetTextPackageAttribution(FontPackage package)
+    {
+        if (!string.IsNullOrWhiteSpace(package.AuthorName))
+        {
+            return $"汉化文本作者：{package.AuthorName.Trim()}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(package.SharerName))
+        {
+            return $"汉化文本分享者：{package.SharerName.Trim()}";
+        }
+
+        return "汉化文本作者：未知作者";
     }
 
     public static IReadOnlyList<LocalizationContentItem> DetectExistingFonts(string gameRoot)
@@ -427,5 +451,7 @@ public static class LocalizationService
         int Order,
         string SupportedGameVersion,
         string Version,
-        string EnglishName);
+        string EnglishName,
+        string AuthorName = "",
+        string SharerName = "");
 }

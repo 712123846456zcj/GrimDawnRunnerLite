@@ -23,6 +23,8 @@
       "id": "affixes-for-professions-enhanced",
       "name": "词缀职业显示增强",
       "englishName": "Affixes for professions are enhanced",
+      "authorName": "",
+      "sharerName": "发光的洛伦兹",
       "version": "1.0.0",
       "supportedGameVersion": "v1.2.1.6",
       "description": "增强装备词缀与职业相关文本的显示和标识，便于查看构筑信息。",

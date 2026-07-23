@@ -212,7 +212,7 @@ public partial class MainWindow : Window
 
         (PageTitleText.Text, PageSubtitleText.Text) = page switch
         {
-            "account" => ("离线和联机", "管理局域网或远程联机使用的唯一账户标识"),
+            "account" => ("离线和联机", "管理局域网或远程联机使用的唯一账户标识 (此自定义账户仅适用于学习版)"),
             "mods" => ("Mod 管理", "集中发现、启用和维护自定义模组"),
             "localization" => ("汉化管理", "一键安装,备份,还原汉化文件"),
             "settings" => ("设置", "下载线路、系统代理与自定义网络设置"),
@@ -810,9 +810,10 @@ public partial class MainWindow : Window
             ? string.Join(Environment.NewLine, existingTexts.Select(item => $"• {item.Description}：{item.Path}"))
             : "未检测到旧的汉化文本目录。";
 
+        string attribution = LocalizationService.GetTextPackageAttribution(package);
         MessageBoxResult answer = MessageBox.Show(
             this,
-            $"汉化文本作者：QQ群1070483622@橙子\n\n检测结果：\n{paths}\n\n安装 {package.Name} 会把压缩包中的 Text_ZH 内容写入游戏根目录。是否继续？",
+            $"{attribution}\n\n检测结果：\n{paths}\n\n安装 {package.Name} 会把压缩包中的 Text_ZH 内容写入游戏根目录。是否继续？",
             "安装汉化文本",
             MessageBoxButton.YesNo,
             MessageBoxImage.Information);

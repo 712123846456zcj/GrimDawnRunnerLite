@@ -15,7 +15,9 @@ public sealed record FontPackage(
     LocalizationPackageType PackageType = LocalizationPackageType.Font,
     string SupportedGameVersion = "全版本通用",
     string Version = "",
-    string EnglishName = "");
+    string EnglishName = "",
+    string AuthorName = "",
+    string SharerName = "");
 
 public sealed record LocalizationContentItem(
     string Path,
